@@ -46,25 +46,43 @@ public class ClientThread extends Thread
 			ac.println("SECURE INIT");
 			
 			//Recibe g,p y g2x
-            String g = dc.readLine();
-            String p = dc.readLine();
+            String g1 = dc.readLine();
+            String p1 = dc.readLine();
             String g2x = dc.readLine();
+			g = new BigInteger(g1);
+			p = new BigInteger(p1);
 
-			System.out.println("G: " + g);
-			System.out.println("P: " + p);
+			System.out.println("G: " + g1);
+			System.out.println("P: " + p1);
 			System.out.println("G2X: " + g2x);
 
 			//Verifica si la firma coincide con los valores de g,p y g2x
             String signature = dc.readLine();
 			String mensaje = g + "," + p +"," + g2x;
-			//boolean verificacion = f.checkSignature(publicaServidor, signature, mensaje)
+			byte[] firma = str2byte(signature);
+			
+			boolean verificacion = f.checkSignature(publicaServidor, firma, mensaje);
 
-			/*if(//signature.compareTo() == 0){
+			if(verificacion == true){
 				ac.println("OK");
 			}
 			else{
 				ac.println("ERROR");
-			}*/
+			}
+
+			//Generar G^y
+			SecureRandom r = new SecureRandom();
+			int y = Math.abs(r.nextInt());
+			
+    		Long longy = Long.valueOf(y);
+    		BigInteger biy = BigInteger.valueOf(longy);
+    		BigInteger valor_comun = G2Y(g,biy,p);
+    		String str_valor_comun = valor_comun.toString();
+    		System.out.println(dlg + "G2Y: "+str_valor_comun);
+
+			//manda G2Y
+			ac.println(str_valor_comun);
+
 		
 	        sc.close();
 	    } catch (Exception e) {
@@ -72,5 +90,30 @@ public class ClientThread extends Thread
 
 	
         
-    }    
+    }  
+	
+	public byte[] str2byte( String ss)
+	{	
+		// Encapsulamiento con hexadecimales
+		byte[] ret = new byte[ss.length()/2];
+		for (int i = 0 ; i < ret.length ; i++) {
+			ret[i] = (byte) Integer.parseInt(ss.substring(i*2,(i+1)*2), 16);
+		}
+		return ret;
+	}
+	
+	public String byte2str( byte[] b )
+	{	
+		// Encapsulamiento con hexadecimales
+		String ret = "";
+		for (int i = 0 ; i < b.length ; i++) {
+			String g = Integer.toHexString(((char)b[i])&0x00ff);
+			ret += (g.length()==1?"0":"") + g;
+		}
+		return ret;
+	}
+
+	private BigInteger G2Y(BigInteger base, BigInteger exponente, BigInteger modulo) {
+		return base.modPow(exponente,modulo);
+	}
 }
