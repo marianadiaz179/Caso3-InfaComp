@@ -1,4 +1,4 @@
-package Servidro;
+package model;
 
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
@@ -19,12 +19,12 @@ public class ClienteMain {
 
 	public static void main(String[] args) throws IOException 
     {
-        for (int i=0; i<1; i++)
+        for (int i=0; i<32; i++)
         {
             ss = new Socket(host,puerto);
             System.out.println("Sending new Client with id " + i);
 
-            ClientThread client = new ClientThread(ss);
+            ClientThread client = new ClientThread(ss, i);
             client.start();
         }
 		
