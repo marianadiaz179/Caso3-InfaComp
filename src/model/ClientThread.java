@@ -1,7 +1,6 @@
 package model;
 
 import java.io.BufferedReader;
-import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.math.BigInteger;
@@ -16,29 +15,30 @@ import javax.crypto.spec.IvParameterSpec;
 
 public class ClientThread extends Thread 
 {
-
+	// Constantes
+	private static final String OK = "OK";
+	private static final String ERROR = "ERROR";
+	
     // Atributos
 	private Socket sc = null;
 	private int id;
-	private String dlg;	
-	private BigInteger p;
-	private BigInteger g;
-	private SecurityFunctions f;	
-	private int mod;
+	private String dlg;
+	private SecurityFunctions f;
 
-    ClientThread (Socket csP, int id) {
-		sc = csP;
-		dlg = new String("Client " + id + ": ");
+	
+    ClientThread (Socket sc, int id) {
+    	this.id = id;
+		this.sc = sc;
+		dlg = new String("Cliente " + id + " - ");
+		f = new SecurityFunctions();
 	}
 
 
     @Override
     public void run() {
         
-        boolean exito = true;
 		String linea;
 	    System.out.println(dlg + "starting.");
-	    f = new SecurityFunctions();
 
 	    try {
 
@@ -49,6 +49,7 @@ public class ClientThread extends Thread
 
 			// 1. Avisa al servidor que puede iniciar
 			ac.println("SECURE INIT");
+			System.out.println(dlg + "SECURE INIT.");
 			
 			// 2. El servidor genera los parametros para DH(G,P,G2X
 			
@@ -56,37 +57,42 @@ public class ClientThread extends Thread
             String str_g = dc.readLine();
             String str_p = dc.readLine();
             String str_g2x = dc.readLine();
-			g = new BigInteger(str_g);
-			p = new BigInteger(str_p);
+        	BigInteger g= new BigInteger(str_g);
+        	BigInteger p = new BigInteger(str_p);
 			BigInteger g2x = new BigInteger(str_g2x);
-
-			System.out.println("G: " + str_g);
-			System.out.println("P: " + str_p);
-			System.out.println("G2X: " + str_g2x);
 
 			// 4. Verifica si la firma coincide con los valores de g,p y g2x
             String signature = dc.readLine();
 			String mensaje = str_g + "," + str_p +"," + str_g2x;
 			byte[] firma = str2byte(signature);
-			
+			long signature_start_time = System.nanoTime();
 			boolean verificacion = f.checkSignature(publicaServidor, firma, mensaje);
+			long signature_end_time = System.nanoTime();
+			long signature_check_time = signature_end_time-signature_start_time;
+			System.out.println(dlg + "Signature check time:" + signature_check_time);    
+			System.out.println(dlg + "Signature check:" + verificacion);    
 
 			// 5. Envia "OK" o "ERROR" dependiendo de la verificacion
 			if(verificacion == true){
-				ac.println("OK");
+				ac.println(OK);
 			}
 			else{
-				ac.println("ERROR");
+				ac.println(ERROR);
 				return;
 			}
 
 			// 6a. Generar G^y
+			
 			SecureRandom r = new SecureRandom();
 			int y = Math.abs(r.nextInt());
 			
     		Long longy = Long.valueOf(y);
     		BigInteger biy = BigInteger.valueOf(longy);
+    		long g2y_start_time = System.nanoTime();
     		BigInteger valor_comun = G2Y(g,biy,p);
+    		long g2y_end_time = System.nanoTime();
+			long g2y_compute_time = g2y_end_time-g2y_start_time;
+			System.out.println(dlg + "G2Y compute time:" + g2y_compute_time); 
     		String str_valor_comun = valor_comun.toString();
     		System.out.println(dlg + "G2Y: "+str_valor_comun);
 
@@ -97,7 +103,7 @@ public class ClientThread extends Thread
 			// computing (G^x)^y mod N
     		BigInteger llave_maestra = calcular_llave_maestra(g2x,biy,p);
     		String str_llave = llave_maestra.toString();
-    		System.out.println(dlg + " llave maestra: " + str_llave);
+    		System.out.println(dlg + "llave maestra: " + str_llave);
     		
     		// generating symmetric key
 			SecretKey sk_clnt = f.csk1(str_llave);
@@ -111,15 +117,19 @@ public class ClientThread extends Thread
 			// Cifrar mensaje
 			Random random = new Random();
 			int valorParaConsultar = random.nextInt(100)+1;
-			
-			/*
-			BigInteger bi_valor = BigInteger.valueOf(valorParaConsultar);
-			byte[] byte_valor = bi_valor.toByteArray();
-			*/
+			System.out.println(dlg + "Query:" + valorParaConsultar);
 			String str_valor = String.valueOf(valorParaConsultar);
 			byte[] byte_valor = str_valor.getBytes();
-			byte[] consulta_cifrada = f.senc(byte_valor, sk_clnt, ivSpec1, "Cliente");
-			byte [] consulta_mac = f.hmac(byte_valor, sk_mac);
+			long start_time = System.nanoTime();
+			byte[] consulta_cifrada = f.senc(byte_valor, sk_clnt, ivSpec1, "Cliente "+id);
+			long end_time = System.nanoTime();
+			long cypher_time = end_time-start_time;
+			System.out.println(dlg + "Cypher Time: " + cypher_time);
+			long auth_start_time = System.nanoTime();
+			byte[] consulta_mac = f.hmac(byte_valor, sk_mac);
+			long auth_end_time = System.nanoTime();
+			long auth_time = auth_end_time-auth_start_time;
+			System.out.println(dlg + "Auth Time: " + auth_time);
 			
 			// 7b. Servidor calcula la llave maestra, la llave simetrica para cifrar y la llave simetrica para HMAC y genera iv2
 			
@@ -133,11 +143,11 @@ public class ClientThread extends Thread
 			// 9. El servidor verifica
 			// 10. El servidor responde con "OK" o "ERROR"
 			linea = dc.readLine();
-			if (linea.compareTo("ERROR")==0) {
-				System.out.println("El servidor respondió 'ERROR'");
+			if (linea.compareTo(ERROR)==0) {
+				System.out.println("Servidor: ERROR");
 				return;
 				
-			} else if (linea.compareTo("OK")==0) {
+			} else if (linea.compareTo(OK)==0) {
 				
 				//11. Listen Cifrado_rta, hmac_respuesta, iv2
 				String str_rta = dc.readLine();
@@ -155,45 +165,30 @@ public class ClientThread extends Thread
 		    	System.out.println(dlg + "Integrity check:" + verificar);
 		    	
 		    	if (verificar) {
-		    		System.out.println("VERIFICACIÓN EXITOSA");
 		    		String str_original = new String(descifrado, StandardCharsets.UTF_8);
 		    		int valor = Integer.parseInt(str_original);
 		    		System.out.println(dlg + "Query answer:" + valor);
 		    		if (valorParaConsultar+1 == valor) { //verifica que el valor recibido sea el valor enviado +1
-		    			String mensajeExito = "OK";
 		    			// 13. "OK"
-		    			ac.println(mensajeExito);
-		    			exito = true;
+		    			ac.println(OK);
+		    			System.out.println(dlg + "OK: Terminó correctamente (" + valorParaConsultar + "+1==" + valor);
 		    		} else {
 		    			// 13. "ERROR"
-		    			String mensajeError = "ERROR";
-			    		ac.println(mensajeError);
-			    		System.out.println("ERROR: el numero recibido no es el numero enviado +1");
+			    		ac.println(ERROR);
+			    		System.out.println(dlg + "ERROR: el numero recibido no es el numero enviado +1");
 			    		return;
 		    		}
-		    		
-		    		
 		    	} else {
 		    		// 13. "ERROR"
-		    		String mensajeError = "ERROR";
-		    		ac.println(mensajeError);
-		    		System.out.println("ERROR en la verificación");
+		    		ac.println(ERROR);
+		    		System.out.println(dlg + "ERROR: Falló la verificación de la respuesta");
 		    		return;
 		    	}
-				
-				
 			}
-			
-			
-			
-			
 	        sc.close();
-	    } catch (Exception e) {
-			 e.printStackTrace(); }
-
-	
-        
-    }  
+	    } catch (Exception e) { e.printStackTrace(); }
+    }
+    
     
 	private byte[] generateIvBytes() {
 	    byte[] iv = new byte[16];
@@ -212,6 +207,7 @@ public class ClientThread extends Thread
 		return ret;
 	}
 	
+	
 	public String byte2str( byte[] b )
 	{	
 		// Encapsulamiento con hexadecimales
@@ -222,10 +218,12 @@ public class ClientThread extends Thread
 		}
 		return ret;
 	}
+	
 
 	private BigInteger G2Y(BigInteger base, BigInteger exponente, BigInteger modulo) {
 		return base.modPow(exponente,modulo);
 	}
+	
 	
 	private BigInteger calcular_llave_maestra(BigInteger base, BigInteger exponente, BigInteger modulo) {
 		return base.modPow(exponente, modulo);
