@@ -171,7 +171,7 @@ public class ClientThread extends Thread
 		    		if (valorParaConsultar+1 == valor) { //verifica que el valor recibido sea el valor enviado +1
 		    			// 13. "OK"
 		    			ac.println(OK);
-		    			System.out.println(dlg + "OK: Terminó correctamente (" + valorParaConsultar + "+1==" + valor);
+		    			System.out.println(dlg + "OK: Terminó correctamente (" + valorParaConsultar + "+1==" + valor + ")A");
 		    		} else {
 		    			// 13. "ERROR"
 			    		ac.println(ERROR);
